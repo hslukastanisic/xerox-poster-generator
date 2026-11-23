@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Poster wall</title>
+<style>
+  :root{
+    --row: 8px;
+    --gap: 14px;
+    --bg: #101010;
+    --edge: rgba(255,255,255,.09);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg);
+    color:#e8e8e8;
+    font:14px/1.4 ui-sans-serif,system-ui,sans-serif;
+    padding:26px clamp(14px,3vw,44px) 70px;
+    overflow-y:scroll;
+  }
+  header{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin:0 0 22px}
+  header h1{font-size:13px;letter-spacing:.24em;text-transform:uppercase;font-weight:600;margin:0}
+  header .meta{color:#7d7d7d;font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+  header .spacer{flex:1}
+  button{
+    background:#1b1b1b;color:#dcdcdc;border:1px solid var(--edge);
+    padding:7px 14px;border-radius:999px;font:inherit;font-size:11px;
+    letter-spacing:.12em;text-transform:uppercase;cursor:pointer;
+  }
+  button:hover{background:#262626}
+  button:focus-visible{outline:2px solid #6cf;outline-offset:2px}
+
+  #grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(178px, 1fr));
+    grid-auto-rows: var(--row);
+    gap: var(--gap);
+    grid-auto-flow: dense;
+    align-items: start;
+  }
+
+  .card{
+    position:relative;
+    overflow:hidden;
+    background:#1a1a1a;
+    border-radius:2px;
+    cursor:zoom-in;
+    aspect-ratio: var(--ar, .707);
+    transition:transform .18s ease, box-shadow .18s ease, filter .18s ease;
+  }
+  .card img{width:100%;height:100%;object-fit:cover;display:block}
+  .card::after{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    box-shadow:inset 0 0 0 1px var(--edge);
+  }
+  .card:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(0,0,0,.55);filter:brightness(1.07)}
+  .cap{
+    position:absolute;left:0;right:0;bottom:0;
+    padding:28px 9px 7px;
+    font-size:10px;letter-spacing:.13em;text-transform:uppercase;line-height:1.25;
+    color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6);
+    background:linear-gradient(transparent, rgba(0,0,0,.75));
+    opacity:0;transition:opacity .18s ease;
+  }
+  .card:hover .cap{opacity:1}
+
+  #empty{
+    display:none;max-width:52ch;margin:12vh auto;text-align:center;
+    color:#8a8a8a;font-size:13px;line-height:1.7;
+  }
+  #empty code{background:#1c1c1c;padding:1px 6px;border-radius:3px;color:#ccc}
+  #empty.visible{display:block}
+  #drop{
+    position:fixed;inset:0;display:none;place-items:center;z-index:20;
+    background:rgba(8,8,8,.85);border:2px dashed #555;font-size:14px;letter-spacing:.12em;
+    text-transform:uppercase;color:#ddd;
+  }
+  #drop.on{display:grid}
+
+  #lb{
+    position:fixed;inset:0;z-index:30;display:none;place-items:center;
+    background:rgba(6,6,6,.95);cursor:zoom-out;padding:3vh 3vw;
+  }
+  #lb.on{display:grid}
+  #lb img{max-width:100%;max-height:94vh;object-fit:contain;box-shadow:0 24px 80px rgba(0,0,0,.7)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Poster wall</h1>
+  <span class="meta" id="count"></span>
+  <span class="spacer"></span>
+  <button id="shuffle" type="button">Shuffle</button>
+</header>
+
+<main id="grid"></main>
+
+<div id="empty">
+  <p><strong>No posters loaded.</strong></p>
+  <p>Generate a manifest next to your images:<br>
+     <code>python poster.py posters/</code></p>
+  <p>Then serve the folder — <code>fetch()</code> won't work from <code>file://</code>:<br>
+     <code>python -m http.server 8000</code></p>
+  <p>Or just drag a folder of posters anywhere on this page.</p>
+</div>
+
+<div id="drop">Drop a folder of posters</div>
+<div id="lb"><img alt=""></div>
+
+<script>
+const CONFIG = {
+  manifest: 'posters/posters.json',   // path to the manifest, relative to this page
+  row: 8,                             // must match --row
+  gap: 14,                            // must match --gap
+  // [column span, probability] — big posters are rarer than small ones
+  tiers: [[3, 0.12], [2, 0.33], [1, 0.55]],
+};
+
+const grid   = document.getElementById('grid');
+const empty  = document.getElementById('empty');
+const lb     = document.getElementById('lb');
+const lbImg  = lb.firstElementChild;
+const countEl = document.getElementById('count');
+
+let items = [];
+let seed  = 0;
+
+/* ---------------------------------------------------------- seeded random */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function newSeed() {
+  const p = new URLSearchParams(location.search);
+  if (p.has('seed')) return Number(p.get('seed')) >>> 0;
+  return (Math.random() * 2 ** 32) >>> 0;
+}
+
+function shuffle(arr, rng) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function pickTier(rng) {
+  const r = rng();
+  let acc = 0;
+  for (const [span, p] of CONFIG.tiers) { acc += p; if (r <= acc) return span; }
+  return 1;
+}
+
+/* ---------------------------------------------------------------- layout */
+function layout() {
+  if (!grid.children.length) return;
+  const tracks = getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean);
+  const n = tracks.length;
+  const colW = parseFloat(tracks[0]);
+  const gap = CONFIG.gap;
+
+  for (const card of grid.children) {
+    const span = Math.max(1, Math.min(Number(card.dataset.cs) || 1, n));
+    const w = colW * span + gap * (span - 1);
+    const h = w / (Number(card.dataset.aspect) || 0.707);
+    const rows = Math.max(3, Math.ceil((h + gap) / (CONFIG.row + gap)));
+    card.style.gridColumn = `span ${span}`;
+    card.style.gridRow = `span ${rows}`;
+  }
+}
+
+let pending = 0;
+function scheduleLayout() {
+  if (pending) return;
+  pending = requestAnimationFrame(() => { pending = 0; layout(); });
+}
+new ResizeObserver(scheduleLayout).observe(grid);
+
+/* ----------------------------------------------------------------- render */
+function render(newSeed) {
+  seed = newSeed >>> 0;
+  const rng = mulberry32(seed);
+  const order = shuffle(items, rng);
+
+  grid.innerHTML = '';
+  const frag = document.createDocumentFragment();
+
+  for (const it of order) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.cs = pickTier(rng);
+    card.dataset.aspect = (it.w || 1000) / (it.h || 1414);
+    card.style.setProperty('--ar', card.dataset.aspect);
+    card.style.gridColumn = 'span 1';
+
+    const img = new Image();
+    img.src = it.url;
+    img.alt = it.title || 'poster';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    card.append(img);
+
+    if (it.title) {
+      const cap = document.createElement('div');
+      cap.className = 'cap';
+      cap.textContent = it.title;
+      card.append(cap);
+    }
+
+    card.addEventListener('click', () => openLb(it.url));
+    frag.append(card);
+  }
+
+  grid.append(frag);
+  countEl.textContent = `${order.length} posters · seed ${seed}`;
+  empty.classList.remove('visible');
+  scheduleLayout();
+}
+
+/* --------------------------------------------------------------- lightbox */
+function openLb(src) {
+  lbImg.src = src;
+  lb.classList.add('on');
+}
+function closeLb() {
+  lb.classList.remove('on');
+  lbImg.removeAttribute('src');
+}
+lb.addEventListener('click', closeLb);
+addEventListener('keydown', e => { if (e.key === 'Escape') closeLb(); });
+
+/* ------------------------------------------------------------- drag & drop */
+async function fromFiles(fileList) {
+  const files = [...fileList].filter(f => /^image\//i.test(f.type));
+  if (!files.length) return;
+
+  items = await Promise.all(files.map(async f => {
+    const url = URL.createObjectURL(f);
+    const [w, h] = await new Promise(res => {
+      const i = new Image();
+      i.onload = () => res([i.naturalWidth, i.naturalHeight]);
+      i.onerror = () => res([1000, 1414]);
+      i.src = url;
+    });
+    return { url, w, h, title: f.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ').toUpperCase() };
+  }));
+  render(newSeed());
+  items.length && countEl.insertAdjacentHTML('afterbegin', '');
+}
+
+let dragDepth = 0;
+addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; document.getElementById('drop').classList.add('on'); });
+addEventListener('dragover',  e => e.preventDefault());
+addEventListener('dragleave', e => { if (--dragDepth <= 0) document.getElementById('drop').classList.remove('on'); });
+addEventListener('drop', async e => {
+  e.preventDefault(); dragDepth = 0;
+  document.getElementById('drop').classList.remove('on');
+  if (e.dataTransfer?.files?.length) await fromFiles(e.dataTransfer.files);
+});
+
+/* ------------------------------------------------------------------- boot */
+document.getElementById('shuffle').addEventListener('click', () => render(newSeed()));
+
+(async function boot() {
+  try {
+    const res = await fetch(CONFIG.manifest, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    const data = await res.json();
+    const list = Array.isArray(data) ? data : (data.posters || []);
+    items = list.map(p => ({
+      ...p,
+      // resolves poster names relative to the manifest, wherever it lives
+      url: new URL(p.src, res.url).href,
+    }));
+    if (!items.length) throw new Error('manifest is empty');
+    render(newSeed());
+  } catch (err) {
+    console.warn('[poster wall]', err);
+    empty.classList.add('visible');
+  }
+})();
+</script>
+</body>
+</html>
