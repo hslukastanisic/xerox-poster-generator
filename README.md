@@ -2,6 +2,8 @@
 
 *Python-Skript zum Erstellen von Punk-Postern im Fotokopierstil (Xerox).*
 
+![[example-poster.png]]
+
 ---
 ## Was das Script macht
 
@@ -67,6 +69,8 @@ python poster.py image.jpg # single poster
 Nutzung:
 - `index.html` öffnen (am Besten als Server, bspw. mit dem Live-Server Plugin im VSCode)
 - Je nachdem, werden die Posters direkt auf der Website geladen. Wenn nicht, dann muss man per Drag&Drop die Posters auf die Seite laden.
+
+![[website-screenshot.png]]
 
 ---
 ## KI-Nutzung
