@@ -2,291 +2,744 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Poster wall</title>
 <style>
-  :root{
-    --row: 8px;
-    --gap: 14px;
-    --bg: #101010;
-    --edge: rgba(255,255,255,.09);
-  }
+  :root{ --bg:#0e0e10; --edge:12vw; }
   *{box-sizing:border-box}
-  html,body{margin:0}
-  body{
-    background:var(--bg);
-    color:#e8e8e8;
-    font:14px/1.4 ui-sans-serif,system-ui,sans-serif;
-    padding:26px clamp(14px,3vw,44px) 70px;
-    overflow-y:scroll;
-  }
-  header{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin:0 0 22px}
-  header h1{font-size:13px;letter-spacing:.24em;text-transform:uppercase;font-weight:600;margin:0}
-  header .meta{color:#7d7d7d;font-size:11px;letter-spacing:.12em;text-transform:uppercase}
-  header .spacer{flex:1}
-  button{
-    background:#1b1b1b;color:#dcdcdc;border:1px solid var(--edge);
-    padding:7px 14px;border-radius:999px;font:inherit;font-size:11px;
-    letter-spacing:.12em;text-transform:uppercase;cursor:pointer;
-  }
-  button:hover{background:#262626}
-  button:focus-visible{outline:2px solid #6cf;outline-offset:2px}
-
-  #grid{
-    display:grid;
-    grid-template-columns:repeat(auto-fill, minmax(178px, 1fr));
-    grid-auto-rows: var(--row);
-    gap: var(--gap);
-    grid-auto-flow: dense;
-    align-items: start;
+  html,body{
+    height:100%;margin:0;overflow:hidden;background:var(--bg);color:#e9e9ea;
+    font:13px/1.45 ui-sans-serif,system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;user-select:none;-webkit-user-select:none;
+    overscroll-behavior:none;
   }
 
-  .card{
-    position:relative;
-    overflow:hidden;
-    background:#1a1a1a;
-    border-radius:2px;
-    cursor:zoom-in;
-    aspect-ratio: var(--ar, .707);
-    transition:transform .18s ease, box-shadow .18s ease, filter .18s ease;
+  /* ---------------- the wall ---------------- */
+  #wall{
+    position:fixed;inset:0;z-index:0;
+    background-color:#101012;background-repeat:repeat;
+    transition:filter .6s ease;
+    will-change:background-position,background-size;
   }
-  .card img{width:100%;height:100%;object-fit:cover;display:block}
-  .card::after{
-    content:"";position:absolute;inset:0;pointer-events:none;
-    box-shadow:inset 0 0 0 1px var(--edge);
+  body.focusing #wall{filter:blur(4px) brightness(.40)}
+
+  #vignette{
+    position:fixed;inset:0;z-index:3;pointer-events:none;
+    background:radial-gradient(120% 100% at 50% 50%,transparent 55%,rgba(0,0,0,.55) 100%);
+    transition:background .6s ease;
   }
-  .card:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(0,0,0,.55);filter:brightness(1.07)}
-  .cap{
-    position:absolute;left:0;right:0;bottom:0;
-    padding:28px 9px 7px;
-    font-size:10px;letter-spacing:.13em;text-transform:uppercase;line-height:1.25;
-    color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6);
-    background:linear-gradient(transparent, rgba(0,0,0,.75));
-    opacity:0;transition:opacity .18s ease;
+  body.focusing #vignette{
+    background:radial-gradient(85% 75% at 50% 50%,transparent 28%,rgba(0,0,0,.88) 100%);
   }
-  .card:hover .cap{opacity:1}
+
+  /* ---------------- walk zones ---------------- */
+  .edge{position:fixed;top:0;bottom:0;width:var(--edge);z-index:1;cursor:pointer}
+  .edge.l{left:0;background:linear-gradient(to right,rgba(255,255,255,.055),transparent)}
+  .edge.r{right:0;background:linear-gradient(to left,rgba(255,255,255,.055),transparent)}
+  .edge::after{
+    content:"";position:absolute;top:50%;margin-top:-17px;
+    font:400 30px/34px ui-sans-serif,sans-serif;color:rgba(255,255,255,.22);
+    opacity:0;transition:opacity .25s;
+  }
+  .edge.l::after{content:"‹";left:16px}
+  .edge.r::after{content:"›";right:16px}
+  .edge:hover::after{opacity:1}
+
+  /* ---------------- posters ---------------- */
+  #world{
+    position:fixed;left:50%;top:50%;width:0;height:0;z-index:2;
+    transform-origin:0 0;pointer-events:none;will-change:transform;
+  }
+  .poster{
+    position:absolute;transform:translate(-50%,-50%);
+    pointer-events:auto;cursor:pointer;background:#1b1b1e;
+    box-shadow:0 0 0 1px rgba(0,0,0,.65),0 8px 22px rgba(0,0,0,.45);
+    transition:opacity .45s ease,box-shadow .35s ease,filter .45s ease;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .poster img{width:100%;height:100%;display:block;object-fit:cover;pointer-events:none}
+  .poster.active{box-shadow:0 0 0 1px rgba(255,255,255,.14),0 26px 80px rgba(0,0,0,.72)}
+  body.focusing .poster:not(.active){opacity:.20}
+
+  /* ---------------- hud ---------------- */
+  #hud{
+    position:fixed;left:0;right:0;bottom:0;z-index:4;pointer-events:none;
+    padding:14px 20px;display:flex;align-items:baseline;gap:18px;
+    font-size:10px;letter-spacing:.19em;text-transform:uppercase;color:#63636a;
+  }
+  #hint{transition:opacity 1s ease;color:#7c7c84}
+  #hint.gone{opacity:0}
 
   #empty{
-    display:none;max-width:52ch;margin:12vh auto;text-align:center;
-    color:#8a8a8a;font-size:13px;line-height:1.7;
+    position:fixed;inset:0;z-index:5;display:none;place-items:center;
+    background:rgba(10,10,12,.92);text-align:center;font-size:13px;color:#8b8b93;
+    line-height:1.8;padding:24px;
   }
-  #empty code{background:#1c1c1c;padding:1px 6px;border-radius:3px;color:#ccc}
-  #empty.visible{display:block}
+  #empty.on{display:grid}
+  #empty code{background:#1c1c20;padding:1px 6px;border-radius:3px;color:#c9c9d2}
+
   #drop{
-    position:fixed;inset:0;display:none;place-items:center;z-index:20;
-    background:rgba(8,8,8,.85);border:2px dashed #555;font-size:14px;letter-spacing:.12em;
-    text-transform:uppercase;color:#ddd;
+    position:fixed;inset:0;z-index:9;display:none;place-items:center;
+    background:rgba(8,8,10,.9);border:2px dashed #4a4a52;
+    font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#ddd;
   }
   #drop.on{display:grid}
-
-  #lb{
-    position:fixed;inset:0;z-index:30;display:none;place-items:center;
-    background:rgba(6,6,6,.95);cursor:zoom-out;padding:3vh 3vw;
-  }
-  #lb.on{display:grid}
-  #lb img{max-width:100%;max-height:94vh;object-fit:contain;box-shadow:0 24px 80px rgba(0,0,0,.7)}
 </style>
 </head>
 <body>
 
-<header>
-  <h1>Poster wall</h1>
-  <span class="meta" id="count"></span>
-  <span class="spacer"></span>
-  <button id="shuffle" type="button">Shuffle</button>
-</header>
+<div id="wall"></div>
+<div class="edge l" data-dir="-1"></div>
+<div class="edge r" data-dir="1"></div>
+<div id="world"></div>
+<div id="vignette"></div>
 
-<main id="grid"></main>
+<div id="hud">
+  <span id="hint">A / D · ← → · wheel · click an edge to walk · click a poster</span>
+  <span id="count"></span>
+</div>
 
 <div id="empty">
-  <p><strong>No posters loaded.</strong></p>
-  <p>Generate a manifest next to your images:<br>
-     <code>python poster.py posters/</code></p>
-  <p>Then serve the folder — <code>fetch()</code> won't work from <code>file://</code>:<br>
-     <code>python -m http.server 8000</code></p>
-  <p>Or just drag a folder of posters anywhere on this page.</p>
+  <div>
+    <p><strong>No posters found.</strong></p>
+    <p>Build the manifest: <code>python poster.py</code></p>
+    <p>Then serve it (<code>fetch</code> is blocked on <code>file://</code>):<br>
+       <code>python -m http.server 8000</code></p>
+    <p>Or drag a folder of images anywhere onto this page.</p>
+  </div>
 </div>
 
 <div id="drop">Drop a folder of posters</div>
-<div id="lb"><img alt=""></div>
 
 <script>
+/* ============================================================ config */
+
 const CONFIG = {
-  manifest: 'posters/posters.json',   // path to the manifest, relative to this page
-  row: 8,                             // must match --row
-  gap: 14,                            // must match --gap
-  // [column span, probability] — big posters are rarer than small ones
-  tiers: [[3, 0.12], [2, 0.33], [1, 0.55]],
+  manifest: 'posters/posters.json',
+  pw: 1.00,          // poster width in metres
+  ph: 1.42,          // poster height in metres
+  speed: 1.75,       // m/s while holding a walk key
+  stepLen: 0.66,     // metres per footstep (drives bob + sound cadence)
+  bobAmp: 4.5,       // px of vertical camera bob
+  focusFill: 0.42,   // focused poster width as a fraction of the viewport
 };
 
-const grid   = document.getElementById('grid');
-const empty  = document.getElementById('empty');
-const lb     = document.getElementById('lb');
-const lbImg  = lb.firstElementChild;
-const countEl = document.getElementById('count');
+const AUDIO = {
+  track: 'assets/footsteps.wav',              // e.g. 'audio/steps.mp3' — ONE continuous footsteps track
+  volume: 0.55,
+  loop: true,
+  fade: 0.12,             // s — gain ramp on start/stop, kills the click
+  rate: 1.0,              // playback speed
+  resumeOnRestart: true,  // true = resume where you stopped, false = restart from 0
+  stepInterval: 0,        // only used when resumeOnRestart is false (see notes)
+  oneShots: [],           // fallback: ['audio/step.mp3', ...] if you have no loop track
+  oneShotVolume: 0.45,
+};
 
-let items = [];
-let seed  = 0;
 
-/* ---------------------------------------------------------- seeded random */
-function mulberry32(a) {
-  return function () {
-    a |= 0; a = a + 0x6D2B79F5 | 0;
+/* ============================================================= utils */
+
+const mod       = (a, n) => ((a % n) + n) % n;
+const clamp     = (v, a, b) => v < a ? a : v > b ? b : v;
+const easeInOut = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6d2b79f5 | 0;
     let t = Math.imul(a ^ a >>> 15, 1 | a);
     t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
 }
 
-function newSeed() {
-  const p = new URLSearchParams(location.search);
-  if (p.has('seed')) return Number(p.get('seed')) >>> 0;
-  return (Math.random() * 2 ** 32) >>> 0;
-}
+/* ============================================================= audio */
 
-function shuffle(arr, rng) {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
+const WalkAudio = (() => {
+  const A = AUDIO;
+  let ctx = null, buffer = null, src = null, gain = null;
+  let loading = false, ready = false, playing = false;
+  let startOffset = 0, startedAt = 0, savedOffset = 0;
+  let shots = [], lastShot = 0;
+
+  function ensureCtx(){
+    if (!ctx){
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ctx = new AC();
+      gain = ctx.createGain();
+      gain.gain.value = 0;
+      gain.connect(ctx.destination);
+    }
+    return ctx;
   }
-  return a;
-}
 
-function pickTier(rng) {
-  const r = rng();
-  let acc = 0;
-  for (const [span, p] of CONFIG.tiers) { acc += p; if (r <= acc) return span; }
-  return 1;
-}
-
-/* ---------------------------------------------------------------- layout */
-function layout() {
-  if (!grid.children.length) return;
-  const tracks = getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean);
-  const n = tracks.length;
-  const colW = parseFloat(tracks[0]);
-  const gap = CONFIG.gap;
-
-  for (const card of grid.children) {
-    const span = Math.max(1, Math.min(Number(card.dataset.cs) || 1, n));
-    const w = colW * span + gap * (span - 1);
-    const h = w / (Number(card.dataset.aspect) || 0.707);
-    const rows = Math.max(3, Math.ceil((h + gap) / (CONFIG.row + gap)));
-    card.style.gridColumn = `span ${span}`;
-    card.style.gridRow = `span ${rows}`;
+  function unlock(){
+    const c = ensureCtx();
+    if (!c) return;
+    if (c.state === 'suspended') c.resume().catch(() => {});
+    if (A.track && !ready && !loading) load();
+    if (A.oneShots.length && !shots.length) buildShots();
   }
-}
 
-let pending = 0;
-function scheduleLayout() {
-  if (pending) return;
-  pending = requestAnimationFrame(() => { pending = 0; layout(); });
-}
-new ResizeObserver(scheduleLayout).observe(grid);
+  async function load(){
+    loading = true;
+    try {
+      const res = await fetch(A.track, { cache: 'force-cache' });
+      if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+      buffer = await ctx.decodeAudioData(await res.arrayBuffer());
+      ready = true;
+    } catch (err){
+      console.warn('[wall] footstep track failed:', err);
+    } finally {
+      loading = false;
+    }
+  }
 
-/* ----------------------------------------------------------------- render */
-function render(newSeed) {
-  seed = newSeed >>> 0;
-  const rng = mulberry32(seed);
-  const order = shuffle(items, rng);
+  const dur = () => (buffer ? buffer.duration : 0);
 
-  grid.innerHTML = '';
-  const frag = document.createDocumentFragment();
+  function posNow(){
+    const d = dur();
+    if (!d) return 0;
+    if (!playing) return savedOffset % d;
+    return ((ctx.currentTime - startedAt) * A.rate + startOffset) % d;
+  }
 
-  for (const it of order) {
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.dataset.cs = pickTier(rng);
-    card.dataset.aspect = (it.w || 1000) / (it.h || 1414);
-    card.style.setProperty('--ar', card.dataset.aspect);
-    card.style.gridColumn = 'span 1';
+  function fadeTo(v, t){
+    const now = ctx.currentTime;
+    const g = gain.gain;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(g.value, now);
+    g.linearRampToValueAtTime(v, now + Math.max(0.02, t));
+  }
 
-    const img = new Image();
-    img.src = it.url;
-    img.alt = it.title || 'poster';
-    img.loading = 'lazy';
-    img.decoding = 'async';
-    card.append(img);
+  function start(){
+    if (!ready || playing) return;
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const d = dur();
+    if (!d) return;
 
-    if (it.title) {
-      const cap = document.createElement('div');
-      cap.className = 'cap';
-      cap.textContent = it.title;
-      card.append(cap);
+    startOffset = A.resumeOnRestart ? savedOffset % d : 0;
+
+    // optional: snap the loop's phase to the camera's step phase
+    if (!A.resumeOnRestart && A.stepInterval > 0){
+      const frac = state.phase - Math.floor(state.phase);
+      startOffset = (startOffset + frac * A.stepInterval) % d;
     }
 
-    card.addEventListener('click', () => openLb(it.url));
-    frag.append(card);
+    src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.loop = A.loop;
+    src.loopEnd = d;
+    src.playbackRate.value = A.rate;
+    src.connect(gain);
+
+    startedAt = ctx.currentTime;
+    src.start(startedAt, startOffset);
+    playing = true;
+    fadeTo(A.volume, A.fade);
   }
 
-  grid.append(frag);
-  countEl.textContent = `${order.length} posters · seed ${seed}`;
-  empty.classList.remove('visible');
-  scheduleLayout();
+  function stop(){
+    if (!playing) return;
+    const d = dur();
+    const t = Math.max(0.02, A.fade);
+    const stopAt = ctx.currentTime + t;
+
+    // position the source will be at when the fade finishes = resume point
+    savedOffset = (posNow() + t * A.rate) % d;
+    playing = false;
+    fadeTo(0, t);
+
+    const s = src;
+    src = null;
+    try { s.stop(stopAt); } catch (_) {}
+    s.onended = () => { try { s.disconnect(); } catch (_) {} };
+  }
+
+  function buildShots(){
+    shots = [];
+    for (const path of A.oneShots){
+      for (let i = 0; i < 4; i++){
+        const a = new Audio(path);
+        a.preload = 'auto';
+        shots.push(a);
+      }
+    }
+  }
+
+  function hit(){
+    if (A.track || !shots.length) return;
+    const now = performance.now();
+    if (now - lastShot < 90) return;
+    lastShot = now;
+    const a = shots[(Math.random() * shots.length) | 0];
+    try {
+      a.pause();
+      a.currentTime = 0;
+      a.playbackRate = 0.94 + Math.random() * 0.12;
+      a.volume = clamp(A.oneShotVolume * (0.85 + Math.random() * 0.3), 0, 1);
+      const p = a.play();
+      if (p) p.catch(() => {});
+    } catch (_) {}
+  }
+
+  ['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
+    addEventListener(ev, unlock, { once: true, passive: true }));
+
+  return { unlock, start, stop, hit };
+})();
+
+
+/* ============================================================ state */
+
+const state = {
+  x: 0, y: 0, z: 1,     // camera: metres horizontally, metres vertically, zoom
+  phase: 0, lastStep: 0, // walk phase in steps (drives bob)
+  env: 0,                // bob envelope 0..1, eased in/out
+  mode: 'idle',          // idle | auto | focusIn | viewing | focusOut
+  auto: null,
+  focus: null,
+};
+
+let items = [];        // manifest entries
+let worldData = null;  // { posters:[{x,y,item}], length }
+let PPM = 180, VW = 0, VH = 0;
+
+const worldEl  = document.getElementById('world');
+const wallEl   = document.getElementById('wall');
+const countEl  = document.getElementById('count');
+const hintEl   = document.getElementById('hint');
+const emptyEl  = document.getElementById('empty');
+
+/* ===================================================== wall texture */
+
+const BRICK_W = 0.62, BRICK_H = 0.48;   // one brick wide, two courses tall
+
+function brickTexture(){
+  const W = 512, H = 400, course = 200;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+
+  let s = 12345;
+  const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+
+  for (let row = 0; row < 2; row++){
+    const off = row ? W / 2 : 0;
+    for (let i = -1; i <= 1; i++){
+      const x = off + i * W;
+      g.fillStyle = 'rgba(255,255,255,' + (0.012 + rnd() * 0.030).toFixed(3) + ')';
+      g.fillRect(x + 3, row * course + 3, W - 6, course - 6);
+    }
+  }
+
+  g.strokeStyle = 'rgba(255,255,255,0.055)';
+  g.lineWidth = 3;
+  g.beginPath();
+  g.moveTo(0, 2);        g.lineTo(W, 2);
+  g.moveTo(0, course+2); g.lineTo(W, course + 2);
+  g.moveTo(1.5, 0);      g.lineTo(1.5, H);
+  g.moveTo(W/2 + 1.5, course); g.lineTo(W/2 + 1.5, H);
+  g.stroke();
+
+  return c.toDataURL('image/png');
 }
 
-/* --------------------------------------------------------------- lightbox */
-function openLb(src) {
-  lbImg.src = src;
-  lb.classList.add('on');
-}
-function closeLb() {
-  lb.classList.remove('on');
-  lbImg.removeAttribute('src');
-}
-lb.addEventListener('click', closeLb);
-addEventListener('keydown', e => { if (e.key === 'Escape') closeLb(); });
+/* =========================================================== layout */
 
-/* ------------------------------------------------------------- drag & drop */
-async function fromFiles(fileList) {
-  const files = [...fileList].filter(f => /^image\//i.test(f.type));
-  if (!files.length) return;
+function worldFromSeed(seed){
+  const rng = mulberry32(seed);
+  const posters = [];
+  let x = 0, prevY = 0;
 
-  items = await Promise.all(files.map(async f => {
-    const url = URL.createObjectURL(f);
-    const [w, h] = await new Promise(res => {
-      const i = new Image();
-      i.onload = () => res([i.naturalWidth, i.naturalHeight]);
-      i.onerror = () => res([1000, 1414]);
-      i.src = url;
-    });
-    return { url, w, h, title: f.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ').toUpperCase() };
-  }));
-  render(newSeed());
-  items.length && countEl.insertAdjacentHTML('afterbegin', '');
+  for (let i = 0; i < items.length; i++){
+    const r = rng();
+    const gap = r < 0.30 ? 0.04 + rng() * 0.26          // tight cluster
+              : r < 0.70 ? 0.45 + rng() * 1.30          // normal
+              :            2.30 + rng() * 3.90;         // sparse
+
+    x += gap + CONFIG.pw / 2;
+
+    let y;
+    if (gap < 0.40 && posters.length){
+      y = prevY + (rng() - 0.5) * 0.55;                 // clusters share a height
+    } else {
+      y = (rng() * 2 - 1) * 1.05;
+    }
+    y = clamp(y, -1.15, 1.15);
+    prevY = y;
+
+    posters.push({ x, y, item: items[i] });
+    x += CONFIG.pw / 2;
+  }
+
+  return { posters, length: Math.max(x + 0.5, 4) };
 }
 
-let dragDepth = 0;
-addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; document.getElementById('drop').classList.add('on'); });
-addEventListener('dragover',  e => e.preventDefault());
-addEventListener('dragleave', e => { if (--dragDepth <= 0) document.getElementById('drop').classList.remove('on'); });
-addEventListener('drop', async e => {
-  e.preventDefault(); dragDepth = 0;
-  document.getElementById('drop').classList.remove('on');
-  if (e.dataTransfer?.files?.length) await fromFiles(e.dataTransfer.files);
+function computePPM(){
+  return clamp(Math.min(VH / 4.3, VW / 9), 110, 340);
+}
+
+function buildTiles(){
+  worldEl.innerHTML = '';
+  if (!worldData) return;
+
+  const L = worldData.length;
+  const span = (VW / 2) / PPM + 2;                 // metres visible either side
+  const K = clamp(Math.ceil(span / L), 1, 6);      // copies needed to loop
+
+  const frag = document.createDocumentFragment();
+
+  for (let k = -K; k <= K; k++){
+    for (let i = 0; i < worldData.posters.length; i++){
+      const p = worldData.posters[i];
+      const wx = p.x + k * L;
+
+      const el = document.createElement('div');
+      el.className = 'poster';
+      el.dataset.pi = i;
+      el.style.left   = (wx * PPM) + 'px';
+      el.style.top    = (p.y * PPM) + 'px';
+      el.style.width  = (CONFIG.pw * PPM) + 'px';
+      el.style.height = (CONFIG.ph * PPM) + 'px';
+
+      const img = document.createElement('img');
+      img.src = p.item.url;
+      img.alt = p.item.title || 'poster';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.draggable = false;
+      el.appendChild(img);
+
+      el.addEventListener('click', ev => {
+        ev.stopPropagation();
+        if (state.mode === 'viewing' || state.mode === 'focusIn'){
+          exitFocus();
+        } else if (state.mode === 'idle' || state.mode === 'auto'){
+          walkTo(i, el);
+        }
+      });
+
+      frag.appendChild(el);
+    }
+  }
+
+  worldEl.appendChild(frag);
+}
+
+/* ========================================================== movement */
+
+function advancePhase(delta){
+  state.phase += delta;
+  const f = Math.floor(state.phase);
+  if (f > state.lastStep){
+    const n = Math.min(4, f - state.lastStep);
+    state.lastStep = f;
+    for (let i = 0; i < n; i++) WalkAudio.hit();
+  }
+}
+
+function walk(d){
+  state.x = mod(state.x + d, worldData.length);
+  advancePhase(Math.abs(d) / CONFIG.stepLen);
+}
+
+function walkTo(idx, el){
+  const rec = worldData.posters[idx];
+  const L = worldData.length;
+
+  let d = mod(rec.x - state.x, L);
+  if (d > L / 2) d -= L;                            // shortest way round
+
+  if (Math.abs(d) < 0.02){ startFocus(idx, rec); return; }
+
+  state.mode = 'auto';
+  state.auto = {
+    dir: Math.sign(d),
+    dist: Math.abs(d),
+    speed: clamp(2.3 + Math.abs(d) * 0.55, 2.6, 6.5),
+    targetX: rec.x,
+    idx,
+  };
+}
+
+function nudge(dir){
+  if (state.mode !== 'idle' || !worldData) return;
+  state.mode = 'auto';
+  state.auto = { dir, dist: 1.1, speed: 2.6, targetX: state.x + dir * 1.1, idx: null };
+}
+
+function startFocus(idx, rec){
+  const zf = clamp((VW * CONFIG.focusFill) / (CONFIG.pw * PPM), 1.7, 4.4);
+  state.mode = 'focusIn';
+  state.focus = { idx, t: 0, dur: 1.1, z0: state.z, z1: zf, y0: state.y, y1: rec.y };
+  worldEl.querySelectorAll('.poster').forEach(n => {
+    n.classList.toggle('active', n.dataset.pi === String(idx));
+  });
+  document.body.classList.add('focusing');
+}
+
+function exitFocus(){
+  if (state.mode !== 'viewing' && state.mode !== 'focusIn') return;
+  const f = state.focus;
+  state.mode = 'focusOut';
+  state.focus = { idx: f.idx, t: 0, dur: 0.85, z0: state.z, z1: 1, y0: state.y, y1: 0 };
+  worldEl.querySelectorAll('.poster.active').forEach(n => n.classList.remove('active'));
+  document.body.classList.remove('focusing');
+}
+
+/* ============================================================ update */
+
+function update(dt){
+  if (!worldData) return;
+  const L = worldData.length;
+  let moving = false;
+
+  switch (state.mode){
+    case 'idle': {
+      const dir = inputDir();
+      if (dir){ walk(dir * CONFIG.speed * dt); moving = true; }
+      break;
+    }
+    case 'auto': {
+      const a = state.auto;
+      const step = Math.min(a.dist, a.speed * dt);
+      walk(a.dir * step);
+      a.dist -= step;
+      moving = true;
+      if (a.dist <= 1e-4){
+        state.x = mod(a.targetX, L);
+        const { idx } = a;
+        state.auto = null;
+        if (idx != null) startFocus(idx, worldData.posters[idx]);
+        else state.mode = 'idle';
+      }
+      break;
+    }
+    case 'focusIn':
+    case 'focusOut': {
+      const f = state.focus;
+      f.t += dt;
+      const u = Math.min(1, f.t / f.dur);
+      const e = easeInOut(u);
+      state.z = f.z0 + (f.z1 - f.z0) * e;
+      state.y = f.y0 + (f.y1 - f.y0) * e;
+      advancePhase(dt / 0.31);
+      moving = true;
+      if (u >= 1){
+        if (state.mode === 'focusIn'){
+          state.mode = 'viewing';
+        } else {
+          state.mode = 'idle';
+          state.focus = null;
+          state.z = 1;
+          state.y = 0;
+        }
+      }
+      break;
+    }
+  }
+
+  if (moving) WalkAudio.start();
+  else WalkAudio.stop();
+
+
+  const target = moving ? 1 : 0;
+  state.env += (target - state.env) * (1 - Math.exp(-dt * 10));
+  if (!moving && state.env < 0.005) state.env = 0;
+}
+
+/* ============================================================ render */
+
+function render(){
+  const z = state.z;
+  const bob = Math.sin(state.phase * Math.PI * 2) * CONFIG.bobAmp * state.env;
+
+  worldEl.style.transform =
+    `translate3d(${-state.x * PPM * z}px,${-state.y * PPM * z + bob}px,0) scale(${z})`;
+
+  const tw = BRICK_W * PPM * z;
+  const th = BRICK_H * PPM * z;
+  const ox = mod(VW / 2 - state.x * PPM * z, tw);
+  const oy = mod(VH / 2 - state.y * PPM * z + bob * 0.9, th);
+
+  wallEl.style.backgroundSize = `${tw}px ${th}px`;
+  wallEl.style.backgroundPosition = `${ox}px ${oy}px`;
+}
+
+/* ============================================================= input */
+
+const keys = new Set();
+let holding = 0, holdStart = 0;
+
+function inputDir(){
+  let d = 0;
+  if (keys.has('left'))  d--;
+  if (keys.has('right')) d++;
+  if (holding < 0) d--;
+  if (holding > 0) d++;
+  return clamp(d, -1, 1);
+}
+
+function hideHint(){ hintEl.classList.add('gone'); }
+
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'arrowleft' || k === 'a'){ keys.add('left');  e.preventDefault(); }
+  else if (k === 'arrowright' || k === 'd'){ keys.add('right'); e.preventDefault(); }
+  else if (k === 'escape'){ exitFocus(); return; }
+  else if (k === 'r'){ reroll(); return; }
+  else return;
+
+  hideHint();
+  if (state.mode === 'viewing' || state.mode === 'focusIn') exitFocus();
 });
 
-/* ------------------------------------------------------------------- boot */
-document.getElementById('shuffle').addEventListener('click', () => render(newSeed()));
+addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'arrowleft' || k === 'a') keys.delete('left');
+  if (k === 'arrowright' || k === 'd') keys.delete('right');
+});
 
-(async function boot() {
-  try {
-    const res = await fetch(CONFIG.manifest, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    const data = await res.json();
-    const list = Array.isArray(data) ? data : (data.posters || []);
-    items = list.map(p => ({
-      ...p,
-      // resolves poster names relative to the manifest, wherever it lives
-      url: new URL(p.src, res.url).href,
-    }));
-    if (!items.length) throw new Error('manifest is empty');
-    render(newSeed());
-  } catch (err) {
-    console.warn('[poster wall]', err);
-    empty.classList.add('visible');
+addEventListener('blur', () => { keys.clear(); holding = 0; });
+
+document.querySelectorAll('.edge').forEach(el => {
+  const dir = Number(el.dataset.dir);
+
+  el.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    hideHint();
+    if (state.mode === 'viewing' || state.mode === 'focusIn'){ exitFocus(); return; }
+    holding = dir;
+    holdStart = performance.now();
+    try { el.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+
+  const release = () => {
+    if (!holding) return;
+    const quick = performance.now() - holdStart < 120;
+    holding = 0;
+    if (quick) nudge(dir);
+  };
+  el.addEventListener('pointerup', release);
+  el.addEventListener('pointercancel', release);
+  el.addEventListener('lostpointercapture', () => { holding = 0; });
+});
+
+addEventListener('wheel', e => {
+  if (!worldData) return;
+  if (state.mode !== 'idle') return;
+  const dir = Math.sign(e.deltaY);
+  if (!dir) return;
+  state.mode = 'auto';
+  state.auto = { dir, dist: 0.9, speed: 2.4, targetX: state.x + dir * 0.9, idx: null };
+}, { passive: true });
+
+document.addEventListener('click', () => {
+  if (state.mode === 'viewing' || state.mode === 'focusIn') exitFocus();
+});
+
+/* ======================================================== boot / data */
+
+function getSeed(){
+  const p = new URLSearchParams(location.search);
+  const v = Number(p.get('seed'));
+  return Number.isFinite(v) && v > 0 ? (v >>> 0)
+       : (Math.random() * 2 ** 32) >>> 0;
+}
+
+function setItems(list){
+  items = list;
+  if (!items.length){ emptyEl.classList.add('on'); return; }
+  emptyEl.classList.remove('on');
+
+  const seed = getSeed();
+  worldData = worldFromSeed(seed);
+
+  state.x = worldData.posters[Math.floor(worldData.posters.length / 2)].x;
+  state.y = 0; state.z = 1;
+  state.mode = 'idle'; state.auto = null; state.focus = null;
+
+  buildTiles();
+  countEl.textContent = `${items.length} posters · seed ${seed}`;
+}
+
+function reroll(){
+  const seed = (Math.random() * 2 ** 32) >>> 0;
+  history.replaceState(null, '', '?seed=' + seed);
+  setItems(items.slice());
+}
+
+function onResize(){
+  const before = PPM;
+  VW = innerWidth; VH = innerHeight;
+  PPM = computePPM();
+  if (PPM !== before && worldData){
+    if (state.mode === 'viewing' || state.mode === 'focusIn' || state.mode === 'focusOut') exitFocus();
+    buildTiles();
   }
+  render();
+}
+
+/* ========================================================= drag & drop */
+
+let dragDepth = 0;
+const dropEl = document.getElementById('drop');
+
+addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; dropEl.classList.add('on'); });
+addEventListener('dragover',  e => e.preventDefault());
+addEventListener('dragleave', () => { if (--dragDepth <= 0) dropEl.classList.remove('on'); });
+addEventListener('drop', async e => {
+  e.preventDefault(); dragDepth = 0; dropEl.classList.remove('on');
+  const files = [...(e.dataTransfer?.files || [])].filter(f => /^image\//i.test(f.type));
+  if (!files.length) return;
+
+  const list = await Promise.all(files.map(async f => {
+    const url = URL.createObjectURL(f);
+    const [w, h] = await new Promise(r => {
+      const i = new Image();
+      i.onload  = () => r([i.naturalWidth, i.naturalHeight]);
+      i.onerror = () => r([1000, 1414]);
+      i.src = url;
+    });
+    return { url, w, h,
+             title: f.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ').toUpperCase() };
+  }));
+  setItems(list);
+});
+
+/* =========================================================== main loop */
+
+let lastT = performance.now();
+
+function frame(t){
+  const dt = Math.min(0.05, (t - lastT) / 1000);
+  lastT = t;
+  update(dt);
+  render();
+  requestAnimationFrame(frame);
+}
+
+(function boot(){
+  VW = innerWidth; VH = innerHeight;
+  PPM = computePPM();
+  wallEl.style.backgroundImage = `url(${brickTexture()})`;
+
+  new ResizeObserver(onResize).observe(document.documentElement);
+  requestAnimationFrame(frame);
+
+  (async () => {
+    try {
+      const res = await fetch(CONFIG.manifest, { cache: 'no-store' });
+      if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data.posters || []);
+      setItems(list.map(p => ({ ...p, url: new URL(p.src, res.url).href })));
+    } catch (err){
+      console.warn('[wall]', err);
+      emptyEl.classList.add('on');
+    }
+  })();
 })();
 </script>
 </body>
